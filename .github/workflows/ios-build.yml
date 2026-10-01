@@ -1,0 +1,55 @@
+name: Build iOS
+
+# Runs on every push to main, and can also be triggered manually from the
+# Actions tab in GitHub (useful while you're still setting things up).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    # GitHub's hosted macOS runner — this is the free Mac you don't have to own.
+    runs-on: macos-latest
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.24.0' # bump this to match your local `flutter --version` if different
+          channel: 'stable'
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Builds an UNSIGNED .app bundle. This is enough to prove the iOS build
+      # works and to run on the iOS Simulator, but it can't be installed on a
+      # real iPhone or submitted to the App Store yet — that needs an Apple
+      # Developer account and signing certificates (see the signed job below,
+      # commented out, once you're ready for that step).
+      - name: Build iOS (no code signing)
+        run: flutter build ios --release --no-codesign
+
+      - name: Zip the build output
+        run: |
+          cd build/ios/iphoneos
+          zip -r Runner.app.zip Runner.app
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: biomark-cmms-ios-unsigned
+          path: build/ios/iphoneos/Runner.app.zip
+          retention-days: 14
+
+  # ---------------------------------------------------------------------------
+  # Once you have an Apple Developer account and want a real, installable,
+  # signed .ipa, add these GitHub secrets (Settings -> Secrets and variables ->
+  # Actions) and uncomment this job: BUILD_CERTIFICATE_BASE64 (your .p12 export,
+  # base64-encoded), P12_PASSWORD, BUILD_PROVISION_PROFILE_BASE64 (your .mobileprovision,
+  # base64-encoded), KEYCHAIN_PASSWORD (any password you make up for the temporary
+  # CI keychain). Then flutter build ipa --export-options-plist=ios/ExportOptions.plist
+  # ---------------------------------------------------------------------------
